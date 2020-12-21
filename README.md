@@ -1,3 +1,3 @@
 ### MPI Programming
 
-This contains codes and related docs for MPI programming tasks undetaken at TU Delft Introduction to High Performance Computing course 2020.  
+This contains codes and related docs for MPI programming tasks undertaken for Introduction to High Performance Computing course at TU Delft 2020.  
