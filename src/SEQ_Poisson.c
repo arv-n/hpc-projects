@@ -97,7 +97,7 @@ void Setup_Grid()
 
   Debug("Setup_Subgrid", 0);
 
-  f = fopen("input.dat", "r");
+  f = fopen("./dat/input.dat", "r");
   if (f == NULL)
     Debug("Error opening input.dat", 1);
   fscanf(f, "nx: %i\n", &gridsize[X_DIR]);
@@ -203,7 +203,7 @@ void Write_Grid()
   int x, y;
   FILE *f;
 
-  if ((f = fopen("output.dat", "w")) == NULL)
+  if ((f = fopen("output_unsym_SEQ.dat", "w")) == NULL)
     Debug("Write_Grid : fopen failed", 1);
 
   Debug("Write_Grid", 0);
