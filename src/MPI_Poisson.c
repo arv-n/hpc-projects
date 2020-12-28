@@ -46,8 +46,9 @@ MPI_Datatype border_type[2];
 
 void Setup_Proc_Grid(int argc, char **argv);
 void Setup_Grid();
-double Do_Step(int parity);
-void Solve();
+void Jacobi_Solve();
+double Do_Step(int parity, const double w);
+void GS_Solve(const double w);
 void Write_Grid();
 void Clean_Up();
 void Debug(char *mesg, int terminate);
@@ -220,22 +221,62 @@ void Exchange_Borders()
                &phi[0][1],1,border_type[X_DIR],proc_left,4,
                grid_comm,&status);
 }
+
+// Jacobi solver routine for comparision 
+void Jacobi_Solve()
+{
+  int count = 0;
+  double global_delta;
+  int x, y;
+  double old_phi;
+  double max_err;
+
+  Debug("Jacobi_Solve", 0);
+
+  /* give global_delta a higher value then precision_goal */
+  global_delta = 2 * precision_goal;
+  while (global_delta > precision_goal && count < max_iter)
+    {
+      max_err = 0.0;
+      /* calculate interior of grid */
+      for (x = 1; x < dim[X_DIR] - 1; x++)
+	for (y = 1; y < dim[Y_DIR] - 1; y++)
+	  if(source[x][y] != 1)
+	    {
+	      old_phi = phi[x][y];
+	      phi[x][y] = (phi[x + 1][y] + phi[x - 1][y] +
+			   phi[x][y + 1] + phi[x][y - 1]) * 0.25;
+	      if (max_err < fabs(old_phi - phi[x][y]))
+		max_err = fabs(old_phi - phi[x][y]);
+	    }
+      Exchange_Borders();
+      
+      MPI_Allreduce(&max_err, &global_delta,1, MPI_DOUBLE, MPI_MAX, grid_comm);
+      if(DEBUG)
+	printf("delta = %f\tglobal_delta= %f\n",max_err, global_delta);
+    
+      count++;
+    }
+  
+  printf("Number of iterations : %i at process %i\n",count, proc_rank);
+}
   
 
-double Do_Step(int parity)
+double Do_Step(int parity, const double w)
 {
   int x, y;
   double old_phi;
-  double max_err = 0.0;
+  double max_err = 0.0, c = 0.0;
 
   /* calculate interior of grid */
   for (x = 1; x < dim[X_DIR] - 1; x++)
     for (y = 1; y < dim[Y_DIR] - 1; y++)
-      if ((x + y) % 2 == parity && source[x][y] != 1)
+      if ((x + offset[X_DIR] + y + offset[Y_DIR]) % 2 == parity && source[x][y] != 1)
       {
 	old_phi = phi[x][y];
-	phi[x][y] = (phi[x + 1][y] + phi[x - 1][y] +
+	c = (phi[x + 1][y] + phi[x - 1][y] +
 		     phi[x][y + 1] + phi[x][y - 1]) * 0.25;
+	phi[x][y] = (1.0 - w)*old_phi + w*c; 
 	if (max_err < fabs(old_phi - phi[x][y]))
 	  max_err = fabs(old_phi - phi[x][y]);
       }
@@ -243,7 +284,7 @@ double Do_Step(int parity)
   return max_err;
 }
 
-void Solve()
+void GS_Solve(const double w)
 {
   int count = 0;
   double delta, global_delta;
@@ -258,11 +299,11 @@ void Solve()
   while (global_delta > precision_goal && count < max_iter)
   {
     Debug("Do_Step 0", 0);
-    delta1 = Do_Step(0);
+    delta1 = Do_Step(0,w);
     Exchange_Borders();
 
     Debug("Do_Step 1", 0);
-    delta2 = Do_Step(1);
+    delta2 = Do_Step(1,w);
     Exchange_Borders();
 
     delta = max(delta1, delta2);
@@ -356,7 +397,7 @@ void Write_Grid_MPI()
 
   //write to file
   MPI_File fh;
-  MPI_File_open(MPI_COMM_WORLD, "test.dat",
+  MPI_File_open(MPI_COMM_WORLD, "Poisson_MPI.dat",
                 MPI_MODE_CREATE|MPI_MODE_WRONLY,
                 MPI_INFO_NULL, &fh);
   MPI_File_set_view(fh,0,MPI_CHAR,localarray,
@@ -452,7 +493,9 @@ int main(int argc, char **argv)
   
   Setup_MPI_Datatypes();
 
-  Solve();
+  //Jacobi_Solve(); //Jacobi Solver
+  
+  GS_Solve(1.0); //Gauss Siedel Solver with SOR, (w = 1, Gauss Siedel w/o SOR) 
 
   Write_Grid_MPI();
 
