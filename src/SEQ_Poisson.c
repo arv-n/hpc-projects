@@ -151,6 +151,50 @@ void Setup_Grid()
   fclose(f);
 }
 
+// Jacobi solver routine for comparision
+double Do_Step_Jacobi()
+{
+  int x, y;
+  double old_phi;
+  double delta = 0.0;
+  
+  /* calculate interior of grid */
+  for (x = 1; x < dim[X_DIR] - 1; x++)
+    for (y = 1; y < dim[Y_DIR] - 1; y++)
+      if(source[x][y] != 1)
+      {
+        old_phi = phi[x][y];
+        phi[x][y] = (phi[x + 1][y] + phi[x - 1][y] +
+                     phi[x][y + 1] + phi[x][y - 1]) * 0.25;
+        if (delta < fabs(old_phi - phi[x][y]))
+          delta = fabs(old_phi - phi[x][y]);
+      }
+  
+  return delta;
+}
+  
+  
+void Jacobi_Solve()
+{
+  int count = 0;
+  double delta;
+
+  Debug("Jacobi_Solve", 0);
+
+  /* give delta a higher value then precision_goal */
+  delta = 2 * precision_goal;
+  while (delta > precision_goal && count < max_iter)
+  {
+    Debug("Do_Step_Jacobi", 0);
+    delta = Do_Step_Jacobi();
+    count++;
+    if(DEBUG)
+      printf("delta = %f\n",delta);  
+  }
+  
+  printf("Number of iterations : %i\n",count);
+}
+
 double Do_Step(int parity)
 {
   int x, y;
@@ -227,15 +271,17 @@ void Clean_Up()
 
 int main(int argc, char **argv)
 {
-  start_timer();
+  
 
   Setup_Grid();
 
-  Solve();
-
-  Write_Grid();
-
+  start_timer();
+  Jacobi_Solve();
+  
+  //Solve();
   print_timer();
+  
+  //Write_Grid();
 
   Clean_Up();
 

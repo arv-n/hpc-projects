@@ -21,7 +21,7 @@ enum
 /* global variables */
 int gridsize[2];
 double precision_goal;		/* precision_goal of solution */
-int max_iter;			/* maximum number of iterations alowed */
+int max_iter, iter;		/* maximum number of iterations alowed, iters reached */
 
 /* benchmark related variables */
 clock_t ticks;			/* number of systemticks */
@@ -38,6 +38,7 @@ int np,world_rank,proc_rank, np_grid[2];   // process ids
 double wtime;                   // wallclock time
 int proc_coord[2];              // coords of current process in grid
 int proc_top, proc_right,proc_bottom,proc_left; // ranks of neighbours
+long data_communicated;
 
 //MPI objects
 MPI_Status status;
@@ -56,6 +57,7 @@ void start_timer();
 void resume_timer();
 void stop_timer();
 void print_timer();
+void print_timer_op(void* params);
 
 void Setup_Proc_Grid(int argc, char **argv)
 {
@@ -83,7 +85,7 @@ void Setup_Proc_Grid(int argc, char **argv)
   MPI_Comm_rank(grid_comm,&proc_rank);
   MPI_Cart_coords(grid_comm,proc_rank,2,proc_coord);
 
-  printf(" %i (x,y)=(%i,%i)\n", proc_rank, proc_coord[X_DIR],proc_coord[Y_DIR]);
+  //printf(" %i (x,y)=(%i,%i)\n", proc_rank, proc_coord[X_DIR],proc_coord[Y_DIR]);
 
   MPI_Cart_shift(grid_comm,X_DIR,1,&proc_left,&proc_right);
   MPI_Cart_shift(grid_comm,Y_DIR,1,&proc_bottom,&proc_top);
@@ -203,6 +205,8 @@ void Setup_MPI_Datatypes()
 
 void Exchange_Borders()
 {
+
+  resume_timer();
   Debug("Exchange_Borders",0);
   
   MPI_Sendrecv(&phi[1][dim[Y_DIR]-2],1,border_type[Y_DIR], proc_top,1,
@@ -220,12 +224,15 @@ void Exchange_Borders()
   MPI_Sendrecv(&phi[dim[X_DIR]-2][1],1,border_type[X_DIR],proc_right,4,
                &phi[0][1],1,border_type[X_DIR],proc_left,4,
                grid_comm,&status);
+  stop_timer();
+  data_communicated += (2 * dim[X_DIR] + 2 * dim[Y_DIR] - 8);
+  
 }
 
 // Jacobi solver routine for comparision 
 void Jacobi_Solve()
 {
-  int count = 0;
+  iter = 0;
   double global_delta;
   int x, y;
   double old_phi;
@@ -235,7 +242,7 @@ void Jacobi_Solve()
 
   /* give global_delta a higher value then precision_goal */
   global_delta = 2 * precision_goal;
-  while (global_delta > precision_goal && count < max_iter)
+  while (global_delta > precision_goal && iter < max_iter)
     {
       max_err = 0.0;
       /* calculate interior of grid */
@@ -255,67 +262,102 @@ void Jacobi_Solve()
       if(DEBUG)
 	printf("delta = %f\tglobal_delta= %f\n",max_err, global_delta);
     
-      count++;
+      iter++;
     }
   
-  printf("Number of iterations : %i at process %i\n",count, proc_rank);
+  //printf("Number of iterations : %i at process %i\n",iter, proc_rank);
 }
   
 
 double Do_Step(int parity, const double w)
 {
+  int modified=1;
+    
   int x, y;
   double old_phi;
   double max_err = 0.0, c = 0.0;
 
+  int skip=0;
+  
   /* calculate interior of grid */
-  for (x = 1; x < dim[X_DIR] - 1; x++)
-    for (y = 1; y < dim[Y_DIR] - 1; y++)
-      if ((x + offset[X_DIR] + y + offset[Y_DIR]) % 2 == parity && source[x][y] != 1)
-      {
-	old_phi = phi[x][y];
-	c = (phi[x + 1][y] + phi[x - 1][y] +
-		     phi[x][y + 1] + phi[x][y - 1]) * 0.25;
-	phi[x][y] = (1.0 - w)*old_phi + w*c; 
-	if (max_err < fabs(old_phi - phi[x][y]))
-	  max_err = fabs(old_phi - phi[x][y]);
+
+  //modified sweep
+  if (modified){
+    for (x = 1; x < dim[X_DIR] - 1; x++){
+      skip = (x+offset[X_DIR]+offset[Y_DIR]+parity+1)%2;
+      for (int y=1 + skip; y<dim[Y_DIR]; y+=2) {
+	if(source[x][y] != 1)
+	  {
+	    old_phi = phi[x][y];
+	    c = (phi[x + 1][y] + phi[x - 1][y] +
+		 phi[x][y + 1] + phi[x][y - 1]) * 0.25;
+	    phi[x][y] = (1.0 - w)*old_phi + w*c; 
+	    if (max_err < fabs(old_phi - phi[x][y]))
+	      max_err = fabs(old_phi - phi[x][y]); 
+	  } 
       }
+    }
+  }
+  //sweep over all grid points
+  else {    
+    for (x = 1; x < dim[X_DIR] - 1; x++)
+      for (y = 1; y < dim[Y_DIR] - 1; y++)
+	if ((x + offset[X_DIR] + y + offset[Y_DIR]) % 2 == parity && source[x][y] != 1)
+	  {
+	    old_phi = phi[x][y];
+	    c = (phi[x + 1][y] + phi[x - 1][y] +
+		 phi[x][y + 1] + phi[x][y - 1]) * 0.25;
+	    phi[x][y] = (1.0 - w)*old_phi + w*c; 
+	    if (max_err < fabs(old_phi - phi[x][y]))
+	      max_err = fabs(old_phi - phi[x][y]);
+	  }
+  }
 
   return max_err;
 }
 
 void GS_Solve(const double w)
 {
-  int count = 0;
+  iter = 0;
   double delta, global_delta;
   double delta1, delta2;
-
+  
   Debug("Solve", 0);
 
   /* give global_delta a higher value then precision_goal */
   global_delta = 2 * precision_goal;
   
 
-  while (global_delta > precision_goal && count < max_iter)
+  while (global_delta > precision_goal && iter < max_iter)
   {
     Debug("Do_Step 0", 0);
     delta1 = Do_Step(0,w);
-    Exchange_Borders();
 
+    
+    Exchange_Borders();
+    
     Debug("Do_Step 1", 0);
     delta2 = Do_Step(1,w);
-    Exchange_Borders();
 
+    Exchange_Borders();
+    
     delta = max(delta1, delta2);
     MPI_Allreduce(&delta, &global_delta,1, MPI_DOUBLE, MPI_MAX, grid_comm);
 
     if(DEBUG)
       printf("delta = %f\tglobal_delta= %f\n",delta, global_delta);
-    
-    count++;
-  }
 
-  printf("Number of iterations : %i at process %i\n",count, proc_rank);
+    /* if(world_rank==0) */
+    /*   printf("%i,%f\n",iter,global_delta); */
+    
+    iter++;
+  }
+  int global_iter;
+  MPI_Allreduce(&iter, &global_iter,1, MPI_INT, MPI_MAX, grid_comm);
+  
+  //if(world_rank==0)
+  //	printf("%i,%i\n",gridsize[X_DIR],iter);
+  //printf("Number of iterations : %i at process %i\n",iter, proc_rank);
 
 }
 
@@ -458,6 +500,26 @@ void print_timer()
     printf("Elapsed wtime: %14.6f s (%5.1f%% CPU)\n", proc_rank, wtime, 100.0 * ticks * (1.0 / CLOCKS_PER_SEC)/wtime);
 }
 
+void print_timer_op(void* params)
+{
+  double time;
+  if (timer_on)
+    {
+      stop_timer();
+      MPI_Allreduce(&wtime, &time,1, MPI_DOUBLE, MPI_MAX, grid_comm);
+      if(world_rank==0)
+	printf("%i,%i,%f\n",gridsize[X_DIR],iter,time);
+      resume_timer();
+    }
+  else
+    {
+      MPI_Allreduce(&wtime, &time,1, MPI_DOUBLE, MPI_MAX, grid_comm);
+      if(world_rank==0)
+	printf("%i,%f",gridsize[X_DIR],wtime);
+    }
+  
+}
+
 void Debug(char *mesg, int terminate)
 {
   if (DEBUG || terminate)
@@ -481,26 +543,40 @@ void Clean_Up()
 
 int main(int argc, char **argv)
 {
+  const double w = 1.95;
+  int size_mpi_double;
+  long data_communicated_bytes;
+  long global_communicated_bytes = 0;
+  
   MPI_Init(NULL,NULL);
   MPI_Comm_size(MPI_COMM_WORLD,&np);
   MPI_Comm_rank(MPI_COMM_WORLD,&world_rank);
 
-  Setup_Proc_Grid(argc,argv); //cartesian topology
-  
-  //start_timer();
+
+  Setup_Proc_Grid(argc,argv); //cartesian topology  
   
   Setup_Grid();
   
   Setup_MPI_Datatypes();
 
   //Jacobi_Solve(); //Jacobi Solver
-  
-  GS_Solve(1.0); //Gauss Siedel Solver with SOR, (w = 1, Gauss Siedel w/o SOR) 
+  //start_timer();
+  GS_Solve(w); //Gauss Siedel Solver with SOR, (w = 1, Gauss Siedel w/o SOR) 
 
-  Write_Grid_MPI();
+  print_timer_op(NULL);
+
+  //Data communicated
+  MPI_Type_size(MPI_DOUBLE, &size_mpi_double);
+  data_communicated_bytes = data_communicated * size_mpi_double;
+  MPI_Reduce(&data_communicated_bytes, &global_communicated_bytes, 1, MPI_LONG, MPI_SUM, 0, grid_comm);
+
+  /* if (world_rank == 0) { */
+  /*   printf(",%f\n", global_communicated_bytes*1.e-6); */
+  /* } */
+  //Write_Grid_MPI();
 
   //print_timer();
-
+  
   Clean_Up();
 
   MPI_Finalize();
