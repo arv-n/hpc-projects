@@ -76,7 +76,7 @@ void Setup_Grid(int argc, char **argv)
   nm = 50;
 /****/
 
-  if ((f = fopen("sources.dat", "r")) == NULL)
+  if ((f = fopen("./dat/sources.dat", "r")) == NULL)
     Debug("Can't open sources.dat", 1);
 
   fscanf(f, "%i\n", &N_sources);
@@ -123,7 +123,7 @@ void Write_Grid()
 
   Debug("Write_Grid", 0);
   printf("Writing Grid\n");
-  sprintf(filename, "grid%i.dat", P_grid[X_DIR] * P_grid[Y_DIR]);
+  sprintf(filename, "./dat/grid%i.dat", P_grid[X_DIR] * P_grid[Y_DIR]);
 
   if ((f=fopen(filename,"w")) == NULL)
     Debug("Write_Grid: Could not open data outputfile", 1);
@@ -155,7 +155,7 @@ void Write_Datafiles()
     {
       printf(" %i", py * P_grid[X_DIR] + px);
       fflush(stdout);
-      sprintf(filename, "input%i-%i.dat", P_grid[X_DIR] * P_grid[Y_DIR],
+      sprintf(filename, "./dat/input%i-%i.dat", P_grid[X_DIR] * P_grid[Y_DIR],
 	      py * P_grid[X_DIR] + px);
       if ((f = fopen(filename, "w")) == NULL)
 	Debug("Write_Datafiles: Could not open data outputfile", 1);
@@ -317,7 +317,7 @@ void Write_GraphMap()
 
   Debug("Write_GraphMap", 0);
 
-  sprintf(filename, "mapping%i.dat", P_grid[X_DIR] * P_grid[Y_DIR]);
+  sprintf(filename, "./dat/mapping%i.dat", P_grid[X_DIR] * P_grid[Y_DIR]);
   if ((f = fopen(filename, "w")) == NULL)
     Debug("Write_GraphMap: Could not open mapping outputfile", 1);
 

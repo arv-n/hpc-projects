@@ -43,8 +43,8 @@ MPI_Status status;
 
 /* benchmark related variables */
 clock_t ticks;			/* number of systemticks */
-double wtime;			/* wallclock time */
-int timer_on = 0;		/* is timer running? */
+int solve_timer =0;		/* is timer running? */
+double compute_time = 0.0, exchange_time = 0.0 , comm_time = 0.0, solve_time = 0.0;
 
 /* local process related variables */
 int proc_rank;			/* rank of current process */
@@ -75,49 +75,49 @@ void resume_timer();
 void stop_timer();
 void print_timer();
 
-void start_timer()
+void start_timer(double* start, int* timer)
 {
-  if (!timer_on)
+  if (!(*timer))
+  {
+    
+    MPI_Barrier(MPI_COMM_WORLD);
+    (*start) = MPI_Wtime();
+    *timer = 1;
+  }
+}
+
+void resume_timer(double* start, int* timer)
+{
+  if (!(*timer))
   {
     MPI_Barrier(MPI_COMM_WORLD);
-    ticks = clock();
-    wtime = MPI_Wtime();
-    timer_on = 1;
+    *start = (MPI_Wtime()- (*start));
+    *timer = 1;
   }
 }
 
-void resume_timer()
+void stop_timer(double* start, int* timer)
 {
-  if (!timer_on)
+  if ((*timer))
   {
-    ticks = clock()-ticks;
-    wtime = MPI_Wtime()-wtime;
-    timer_on = 1;
+    
+    *start = (MPI_Wtime() - (*start));
+    *timer = 0;
   }
 }
 
-void stop_timer()
+void print_timer(double* time, int* timer)
 {
-  if (timer_on)
+  if ((*timer))
   {
-    ticks = clock() - ticks;
-    wtime = MPI_Wtime() - wtime;
-    timer_on = 0;
-  }
-}
-
-void print_timer()
-{
-  if (timer_on)
-  {
-    stop_timer();
-    printf("(%i) Elapsed Wtime: %14.6f s (%5.1f%% CPU)\n",
-	   proc_rank, wtime, 100.0 * ticks * (1.0 / CLOCKS_PER_SEC) / wtime);
-    resume_timer();
+    stop_timer(time,timer);
+    printf("(%i) Elapsed Wtime: %14.6f s\n",
+	   proc_rank, *time);
+    resume_timer(time,timer);
   }
   else
-    printf("(%i) Elapsed Wtime: %14.6f s (%5.1f%% CPU)\n",
-	   proc_rank, wtime, 100.0 * ticks * (1.0 / CLOCKS_PER_SEC) / wtime);
+    printf("(%i) Elapsed Wtime: %14.6f s\n",
+	   proc_rank, *time);
 }
 
 void Debug(char *mesg, int terminate)
@@ -148,7 +148,7 @@ void Setup_Proc_Grid()
   /* Create process topology (Graph) */
   if (proc_rank == 0)
   {
-    sprintf(filename, "mapping%i.dat", P);
+    sprintf(filename, "./dat/mapping%i.dat", P);
     if ((f = fopen(filename, "r")) == NULL)
       Debug("My_MPI_Init : Can't open mapping inputfile", 1);
 
@@ -216,7 +216,7 @@ void Setup_Grid()
   /* read general parameters (precision/max_iter) */
   if (proc_rank==0)
   {
-    if ((f = fopen("input.dat", "r")) == NULL)
+    if ((f = fopen("./dat/input.dat", "r")) == NULL)
       Debug("Setup_Grid : Can't open input.dat", 1);
     fscanf(f, "precision goal: %lf\n", &precision_goal);
     fscanf(f, "max iterations: %i", &max_iter);
@@ -226,7 +226,7 @@ void Setup_Grid()
   MPI_Bcast(&max_iter, 1, MPI_INT, 0, grid_comm);
 
   /* read process specific data */
-  sprintf(filename, "input%i-%i.dat", P, proc_rank);
+  sprintf(filename, "./dat/input%i-%i.dat", P, proc_rank);
   if ((f = fopen(filename, "r")) == NULL)
     Debug("Setup_Grid : Can't open data inputfile", 1);
   fscanf(f, "N_vert: %i\n%*[^\n]\n", &N_vert);
@@ -423,21 +423,16 @@ void Setup_MPI_Datatypes(FILE * f)
   free(indices);
 }
 
-
-
-
-
 void Exchange_Borders(double *vect)
 {
-
-    
-    // Please finsih this part to realize the purpose of data communication among neighboring processors. (Tip: the function "MPI_Sendrecv" needs to be used here.)
+  
+  Debug("Exchange_Borders", 0);
+  for(int i=0; i<N_neighb; i++)
+    MPI_Sendrecv(vect, 1 , send_type[i], proc_neighb[i],0,
+                 vect, 1, recv_type[i], proc_neighb[i],0,
+                 grid_comm, &status);
+  
 }
-
-
-
-
-
 
 void Solve()
 {
@@ -448,19 +443,31 @@ void Solve()
 
   double sub;
 
+  double timer_exchange_borders_start,timer_exchange_borders_stop,
+    timer_computation_start,timer_computation_stop,
+    timer_global_comm_start,timer_global_comm_stop,
+    timer_solve_start,timer_solve_stop;
+
   Debug("Solve", 0);
 
   if ((r = malloc(N_vert * sizeof(double))) == NULL)
-      Debug("Solve : malloc(r) failed", 1);
+    Debug("Solve : malloc(r) failed", 1);
   if ((p = malloc(N_vert * sizeof(double))) == NULL)
-      Debug("Solve : malloc(p) failed", 1);
+    Debug("Solve : malloc(p) failed", 1);
   if ((q = malloc(N_vert * sizeof(double))) == NULL)
-      Debug("Solve : malloc(q) failed", 1);
+    Debug("Solve : malloc(q) failed", 1);
 
   /* Implementation of the CG algorithm : */
 
-  Exchange_Borders(phi);
+  start_timer(&solve_time,&solve_timer);
 
+  timer_exchange_borders_start = MPI_Wtime();
+  Exchange_Borders(phi);
+  timer_exchange_borders_stop = MPI_Wtime();
+  exchange_time += (timer_exchange_borders_stop - timer_exchange_borders_start);
+
+
+  timer_computation_start = MPI_Wtime();
   /* r = b-Ax */
   for (i = 0; i < N_vert; i++)
   {
@@ -468,22 +475,33 @@ void Solve()
     for (j = 0; j < A[i].Ncol; j++)
       r[i] -= A[i].val[j] * phi[A[i].col[j]];
   }
+  timer_computation_stop = MPI_Wtime();
+  compute_time += (timer_computation_stop - timer_computation_start);
 
   r1 = 2 * precision_goal;
+
   while ((count < max_iter) && (r1 > precision_goal))
   {
+    timer_computation_start = MPI_Wtime();
     /* r1 = r' * r */
     sub = 0.0;
     for (i = 0; i < N_vert; i++)
       if (!(vert[i].type & TYPE_GHOST))
-	sub += r[i] * r[i];
-    MPI_Allreduce(&sub, &r1, 1, MPI_DOUBLE, MPI_SUM, grid_comm);
+        sub += r[i] * r[i];
+    timer_computation_stop = MPI_Wtime();
+    compute_time += (timer_computation_stop - timer_computation_start);
 
+    timer_global_comm_start = MPI_Wtime();
+    MPI_Allreduce(&sub, &r1, 1, MPI_DOUBLE, MPI_SUM, grid_comm);
+    timer_global_comm_stop = MPI_Wtime();
+    comm_time += (timer_global_comm_stop - timer_global_comm_start);
+
+    timer_computation_start = MPI_Wtime();
     if (count == 0)
     {
       /* p = r */
       for (i = 0; i < N_vert; i++)
-	p[i] = r[i];
+        p[i] = r[i];
     }
     else
     {
@@ -491,10 +509,17 @@ void Solve()
 
       /* p = r + b*p */
       for (i = 0; i < N_vert; i++)
-	p[i] = r[i] + b * p[i];
+        p[i] = r[i] + b * p[i];
     }
-    Exchange_Borders(p);
+    timer_computation_stop = MPI_Wtime();
+    compute_time += (timer_computation_stop - timer_computation_start);
 
+    timer_exchange_borders_start = MPI_Wtime();
+    Exchange_Borders(p);
+    timer_exchange_borders_stop = MPI_Wtime();
+    exchange_time += (timer_exchange_borders_stop - timer_exchange_borders_start);
+
+    timer_computation_start = MPI_Wtime();
     /* q = A * p */
     for (i = 0; i < N_vert; i++)
     {
@@ -507,8 +532,16 @@ void Solve()
     sub = 0.0;
     for (i = 0; i < N_vert; i++)
       if (!(vert[i].type & TYPE_GHOST))
-	sub += p[i] * q[i];
+        sub += p[i] * q[i];
+    timer_computation_stop = MPI_Wtime();
+    compute_time += (timer_computation_stop - timer_computation_start);
+
+    timer_global_comm_start = MPI_Wtime();
     MPI_Allreduce(&sub, &a, 1, MPI_DOUBLE, MPI_SUM, grid_comm);
+    timer_global_comm_stop = MPI_Wtime();
+    comm_time += (timer_global_comm_stop - timer_global_comm_start);
+
+    timer_computation_start = MPI_Wtime();
     a = r1 / a;
 
     /* x = x + a*p */
@@ -520,16 +553,22 @@ void Solve()
       r[i] -= a * q[i];
 
     r2 = r1;
-
+    timer_computation_stop = MPI_Wtime();
+    compute_time += (timer_computation_stop - timer_computation_start);
+    
     count++;
   }
+
+  stop_timer(&solve_time,&solve_timer);
+
+
   free(q);
   free(p);
   free(r);
 
-  if (proc_rank == 0)
-    printf("Number of iterations : %i\n", count);
+  printf("Number of iterations : %i\n", count); */
 }
+
 
 void Write_Grid()
 {
@@ -539,7 +578,7 @@ void Write_Grid()
 
   Debug("Write_Grid", 0);
 
-  sprintf(filename, "output%i-%i.dat", P, proc_rank);
+  sprintf(filename, "./dat/output%i-%i.dat", P, proc_rank);
   if ((f = fopen(filename, "w")) == NULL)
     Debug("Write_Grid : Can't open data outputfile", 1);
 
@@ -572,27 +611,38 @@ void Clean_Up()
   free(phi);
 }
 
+void print_times()
+{
+
+  double idle_time = solve_time - (compute_time + exchange_time + comm_time);
+
+  //printf("\n%i,%i,%1.4f,%1.4f,%1.4f,%1.4f,%1.6f\n",100,proc_rank,compute_time,exchange_time,comm_time,solve_time,idle_time);
+  printf("%i,%1.4f,%1.4f\n",proc_rank,solve_time,compute_time);
+
+}
+
+  
+
 int main(int argc, char **argv)
 {
+  
   MPI_Init(&argc, &argv);
-
-  start_timer();
-
+  
   Setup_Proc_Grid();
-
   Setup_Grid();
-
+  
   Solve();
 
+  print_times();
+  
   Write_Grid();
-
+  
   Clean_Up();
-
-  print_timer();
-
+  
   Debug("MPI_Finalize", 0);
 
   MPI_Finalize();
-
+ 
+  
   return 0;
 }

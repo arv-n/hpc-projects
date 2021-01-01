@@ -9,7 +9,7 @@ GD_OBJS = GridDist.o
 all: MPI_Fempois GridDist
 
 clean:
-	rm -f *.o 
+	rm -f MPI_Fempois.o MPI_Fempois
 
 MPI_Fempois: $(FP_OBJS)
 	mpicc -o $@ $(FP_OBJS) $(FP_LIBS)
