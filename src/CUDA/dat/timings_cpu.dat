@@ -1,0 +1,10 @@
+Matrix size 5000 X 5000 
+CPU: run time = 1.146435 secs.
+Matrix size 50 X 50 
+CPU: run time = 0.000171 secs.
+Matrix size 500 X 500 
+CPU: run time = 0.015287 secs.
+Matrix size 2000 X 2000 
+CPU: run time = 0.218504 secs.
+Matrix size 5000 X 5000 
+CPU: run time = 1.144645 secs.

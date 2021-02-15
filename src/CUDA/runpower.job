@@ -9,8 +9,8 @@
 
 module load cuda10.0/toolkit
 
-file='HelloWorld'
+file='power_gpu_glb'
 
 nvcc -o $file $file.cu
 
-./$file
+./$file -size 5000 

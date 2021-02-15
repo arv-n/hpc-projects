@@ -1,0 +1,27 @@
+50 X 50 for threads/Block 32 
+memtime,kerneltime,total
+0.000397,0.000559,0.001479
+500 X 500 for threads/Block 32 
+memtime,kerneltime,total
+0.000699,0.000999,0.002243
+2000 X 2000 for threads/Block 32 
+memtime,kerneltime,total
+0.002323,0.003413,0.006295
+5000 X 5000 for threads/Block 32 
+memtime,kerneltime,total
+0.011897,0.008467,0.020887
+50 X 50 for threads/Block 64 
+memtime,kerneltime,total
+0.000400,0.000560,0.001482
+500 X 500 for threads/Block 64 
+memtime,kerneltime,total
+0.000660,0.001023,0.002197
+2000 X 2000 for threads/Block 64 
+memtime,kerneltime,total
+0.002317,0.003168,0.006042
+5000 X 5000 for threads/Block 64 
+memtime,kerneltime,total
+0.014211,0.013597,0.028341
+50 X 50 for threads/Block 64 
+memtime,kerneltime,total
+0.000398,0.000553,0.001470
