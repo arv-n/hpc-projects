@@ -379,7 +379,7 @@ void Write_Grid()
   fclose(f);
 }
 
-
+//Wrote a custom writefile function that parallely writes all results into one file
 void Write_Grid_MPI()
 {
 

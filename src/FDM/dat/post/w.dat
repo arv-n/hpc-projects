@@ -1,6 +1,6 @@
 #data for gridsize=100 with 4X1 topology
-#omega	  Wtime	       n
-1.000	      0.194709	2355
+#omega	  Wtime	       n      
+1.000	      0.194709	2355 
 1.900	      0.041364	220
 1.910	      0.037918	194
 1.920	      0.036900	165

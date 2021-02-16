@@ -1,0 +1,86 @@
+\documentclass[a4paper]{article}
+
+%%%%%%%% CREATE DOCUMENT STRUCTURE %%%%%%%%
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+%\usepackage{subfig}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=3cm,bottom=2cm,left=2cm,right=2cm,marginparwidth=1.75cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage[justification=centering]{caption}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{sectsty}
+\usepackage{apacite}
+\usepackage{float}
+\usepackage{titling} 
+\usepackage{blindtext}
+\usepackage[square,sort,comma,numbers]{natbib}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage{xcolor}
+\definecolor{darkgreen}{rgb}{0.0, 0.4, 0.0}
+% CStyle lisitng
+\definecolor{comment}{rgb}{0,0.6,0} %green
+\definecolor{string}{RGB}{0.58,0,0.82}  % red
+\definecolor{keyword}{RGB}{0,0,1} % blue
+\definecolor{backgroundColour}{rgb}{0.95,0.95,0.92}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5} 
+
+\lstdefinestyle{CStyle}{
+  language=C++,
+  backgroundcolor=\color{backgroundColour},
+	commentstyle=\color{comment},
+	stringstyle=\color{string},
+	keywordstyle=\color{keyword},
+        numberstyle=\tiny\color{codegray},
+	basicstyle=\footnotesize\ttfamily,
+	numbersep=5pt,
+	frame=lines,
+	breaklines=true,
+	prebreak=\raisebox{0ex}[0ex][0ex]{\ensuremath{\hookleftarrow}},
+	showstringspaces=false,
+	upquote=true,
+	tabsize=4,
+        numbers=left
+}
+
+%% Graphics path
+\graphicspath{{./graphics/}}
+
+%%%%%%%% DOCUMENT %%%%%%%%
+\begin{document}
+
+%%%titlepage
+\input{titlepage}
+
+%%%% toc
+\tableofcontents
+\newpage
+%%%% SECTIONS
+\input{fdm}
+\newpage
+\input{fem}
+\newpage
+\input{gpu}
+
+
+
+\newpage
+\bibliographystyle{apacite}
+\bibliography{references}
+
+\end{document}
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

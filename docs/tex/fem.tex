@@ -1,0 +1,89 @@
+\section{Ex2: Poisson Solver with Finite Elements}
+This exercise involves the red-black Gauss-Seidel method applied to finite element problems. 
+\subsection{Border exchange}
+To perform data communication, the following code is added to the Exchange$ \textunderscore $Borders() function. \\
+
+\begin{lstlisting}[style=CStyle]
+ void Exchange_Borders(double *vect)
+ {
+  int i;
+  for(i = 0; i < N_neighb; i++)
+    MPI_Sendrecv(vect,1,send_type[i],proc_neighb[i],0,
+                 vect,1,recv_type[i],proc_neighb[i],0,
+                 grid_comm,&status);
+		}
+\end{lstlisting}
+              
+\subsection{Benchmarking}
+In order to benchmark the MPI$ \textunderscore $Fempois.c program, we consider the Solve() function which involves point-to-point communication and global communication. Point-to-point communication is done to communicate the function values to neighboring processes whereas global communication is done to communicate the dot product from each process to all processes which is done using the MPI$ \textunderscore $Allreduce() function. We choose the following for benchmarking. 
+              
+\begin{itemize}
+\item Computation time
+\item Border exchange time
+\item Global communication time
+\item Idle time
+\end{itemize}
+
+Computation time is calculated for the function Solve() by masking the global communication function MPI$ \textunderscore $Allreduce() and the border exchange function, and considering only the computations. Global communication time and border exchange time are calculated by wrapping the global communication function MPI$ \textunderscore $Allreduce() and the Exchange$ \textunderscore $Borders() function in a timer respectively. Finally, idle time is calculated using the following relation.
+
+\begin{center}
+  Idle time = total time - computation time - communication time 
+\end{center}
+
+where total time is the time taken by the Solve() function which is calculated by wrapping the Solve() function around a timer and communication time involves both global communication and border exchanges. Note that this benchmarking corresponds only to the Solve() function and not to the entire program. This means that the idle time signifies the time a processor is idle when doing \textit{computations}. The results are tabulated in table \ref{42}. \\
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{|c|c|c|c|c|c|c|}
+    \hline
+    Pt & g & wtime & Computation & Global comm & Exchange borders & Idle \\
+    \hline
+       & 100 & 0.074315 & 0.040482 & 0.002495 & 0.013155 & 0.000082 \\
+    414 & 200 & 0.306800 & 0.233759 & 0.004113 & 0.013163 & 0.000123 \\
+       & 400 & 1.795695 & 1.411101 & 0.145229 & 0.057769 & 0.000256\\	
+    \hline	
+       & 100 & 0.073564 & 0.040351 & 0.002792 & 0.012588 & 0.000068 \\
+    422 & 200 & 0.308903 & 0.231843 & 0.004269 & 0.012930 & 0.000128 \\
+       & 400 & 1.675330 & 1.418528 & 0.061721 & 0.030194 & 0.000229 \\	
+    \hline
+  \end{tabular}
+  \caption{Benchmarking: task times in seconds}
+  \label{42}
+\end{table}
+              
+The times calculated will be displayed on the terminal when the program is run. For more details, refer to the MPI$ \textunderscore $Fempois.c program. 
+
+\subsection{Data transfer}
+
+\subsection{Asymmetry}
+The asymmetry of border exchanges comes from the way of grid partitioning of the finite element method. The N,E,W,S partitioning which applies to FDM, is not suitable for FEM since the domain is triangulated. 2 processes communicate with three neighbors whereas the others communicate with two neighbors. 
+
+
+Similarly, in a 3 $ \times $ 3 partitioning, the process at the center could possibly communicate with at most 8 neighbors (can be imagined as an octagon at the center) and the processes at the corners could communicate with 3 processes at most. 
+
+\subsection{Data locality ratio}
+With four processes, the computation time is almost equal to the communication time for a grid size of 73 $ \times $ 73. For the problem size 1000 $ \times $ 1000, computation time far exceeds communication time despite using 32 processes, making it difficult to determine the times for a data locality ratio of 1 by experiments. 
+
+\subsection{Mesh refinement}
+Mesh refinement is done by using the command \textit{adapt} and the results are tabulated as follows. tcomp is computation time and adapt refers to the refined mesh. 
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{|c|c|c|c|c|c|c|}
+    \hline
+    g & n & n adapt & t & t adapt & tcomp & tcomp adapt \\
+    \hline
+    100 & 141 & 146	& 0.080618  & 0.083603 & 0.034146 & 0.046426 \\	
+    200 & 274 & 278	& 0.312281  & 0.314155 & 0.228471 & 0.229128 \\
+    400 & 529 & 532	& 1.751257	& 1.766172 & 1.421017 & 1.441059 \\   
+    \hline	
+  \end{tabular}
+  \caption{Mesh refinement}
+  \label{adapt}
+\end{table}
+
+It is evident from table \ref{adapt} that the number of iterations, execution time and computation time all increase due to mesh refinement. This is due to the fact that mesh refinement is done to increase the accuracy of the solution by adding more points in the region of interest. More points, more is the computation and more is the number of iterations needed for convergence, which is also intuitive. 
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "report"
+%%% End:

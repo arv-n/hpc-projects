@@ -1,0 +1,118 @@
+\section{Ex3: Power Method with GPUs}
+\label{sec:gpu}
+Using the sequential version of the code \texttt{power\_cpu.cu}, we build our CUDA implementation \nocite{slides} \nocite{kirk2016parallel} of the Power Method problem. We conduct several comparisons of solving eigenvalue problem using power method on CPU and GPU. The essence of power method includes parallelization of matrix-vector multiplication. We skip Step 4 since we explain our conclusions alongside all corresponding results. Unless otherwise mentioned, all times are shown in seconds.
+
+\subsubsection*{Step 1}
+We compare the speed differences between \textbf{shared} and \textbf{global} memory versions, implemented in \texttt{power\_gpu\_shr.cu} and \texttt{power\_gpu\_glb.cu}. The kernels using global memory implemented are as follows:
+
+\begin{lstlisting}[style=CStyle]
+/Kernels
+__global__ void Av_Product(float* g_MatA, float* g_VecV, float* g_VecW, int N)
+{
+  //global thread index
+  unsigned int globalid = threadIdx.x + blockIdx.x*blockDim.x;
+  float sum = 0;
+  if(globalid < N){
+    for(int i=0; i<N; i++)
+      sum+= g_MatA[i+(globalid*N)]*g_VecV[i];
+    g_VecW[globalid]=sum;        
+  }
+}
+
+__global__ void FindNormW(float* g_VecW, float * g_NormW, int N)
+{
+  unsigned int globalid = threadIdx.x + blockIdx.x*blockDim.x;
+  if(globalid < N)
+    atomicAdd(g_NormW,g_VecW[globalid]*g_VecW[globalid]);
+}
+
+__global__ void NormalizeW(float* g_VecW, float * g_NormW, float* g_VecV, int N)
+{
+  unsigned int globalid = threadIdx.x + blockIdx.x*blockDim.x;
+  if(globalid < N)
+    g_VecV[globalid]= g_VecW[globalid]/g_NormW[0];
+}
+
+__global__ void ComputeLamda( float* g_VecV, float* g_VecW, float * g_Lamda,int N)
+{
+  unsigned int globalid = threadIdx.x + blockIdx.x*blockDim.x;
+  if(globalid < N)
+    atomicAdd(g_Lamda, g_VecV[globalid] * g_VecW[globalid]);
+}
+\end{lstlisting}
+
+With the help of shared kernels we list our performance metrics in step 2 for various matrix sizes (N).
+
+\subsubsection*{Step 2}
+Table \ref{tab:perf} shows the total computation times taken by CPU purely and the GPU in both variants of the memory implementations. 
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llll@{}}
+  N    & CPU      & GPU\_global & GPU\_shared \\
+  \hline
+50   & 0.000171 & 0.001554    & 0.001479    \\
+500  & 0.015287 & 0.002162    & 0.002243    \\
+2000 & 0.218504 & 0.008506    & 0.006295    \\
+5000 & 1.144645 & 0.036006    & 0.020887   
+\end{tabular}
+\caption{Total compute times (in secs) for CPU and GPU(both memory versions) done for a fixed iteration count of 10 for accurate estimations. ThreadsPerBlock=32}
+\label{tab:perf}
+\end{table}
+Clearly, the shared memory version performs much faster than the global memory version. CPU times are comparable when N is small but GPUs outperform as N scales to larger values. 
+Let us now observe the execution times for a matrix A with different sizes and different threads. Let us consider the shared version of the GPU implementation.
+% Please add the following required packages to your document preamble:
+% \usepackage{booktabs}
+\begin{table}[]
+\centering
+\begin{tabular}{@{}llll@{}}
+  \textbf{N\textbackslash{}ThreadsPerBlock} & \textbf{32} & \textbf{64} & \textbf{128} \\
+  \hline
+\textbf{50}                               & 0.001479    & 0.001482    & -            \\
+\textbf{500}                              & 0.002243    & 0.002197    & -            \\
+\textbf{2000}                             & 0.006295    & 0.006042    & -            \\
+\textbf{5000}                             & 0.020887    & 0.028341    & -           
+\end{tabular}
+\caption{total compute times(in secs) of shared memory implementation with Different threads and Matrix sizes (N).}
+\label{tab:shr}
+\end{table}
+As we see that for number of threads per block becomes 128, the GPU runs out of shared memory space, and thus we are unable to run the program. In contrast to the global memory implementation, we see that 128 threads can be used to successfully compute the solution.
+% Please add the following required packages to your document preamble:
+% \usepackage{booktabs}
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llll@{}}
+  \textbf{N\textbackslash{}ThreadsPerBlock} & \textbf{32} & \textbf{64} & \textbf{128} \\
+  \hline
+\textbf{50}                               & 0.001554    & 0.001529    & 0.001414     \\
+\textbf{500}                              & 0.002162    & 0.002212    & 0.002318     \\
+\textbf{2000}                             & 0.008506    & 0.006922    & 0.006932     \\
+\textbf{5000}                             & 0.036006    & 0.034855    & 0.037112    
+\end{tabular}
+\caption{compute times (in secs) for global memory version}
+\label{tab:glb}
+\end{table}
+There is no observed significance in computing times with increase in threads. They roughly compute within same time margins. We can conclude that for increase in performance, shared memory version is better but comes at tradeoff of how much data can be stored in the shared memory space. 
+
+\subsubsection*{Step 3}
+Let us now analyze the times spent in memory transfers. We compare these results with times elapsed excluding memory transfers.\\
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lllllll@{}}
+  & \multicolumn{2}{c}{\textbf{T\_memory}}                                    & \multicolumn{2}{c}{\textbf{T\_total}}                                     & \textbf{}                                     & \textbf{}                                    \\
+  \hline
+  \multicolumn{1}{c}{\textbf{N}} & \multicolumn{1}{c}{\textbf{shared}} & \multicolumn{1}{c}{\textbf{global}} & \multicolumn{1}{c}{\textbf{shared}} & \multicolumn{1}{c}{\textbf{global}} & \multicolumn{1}{c}{\textbf{SpeedUp(Inc.Mem)}} & \multicolumn{1}{c}{\textbf{SpeedUp(ExcMem)}} \\
+  \hline
+  \textbf{50}                    & 0.000397                            & 0.000444                            & 0.001479                            & 0.001554                            & 1.050709939                                   & 0.9747747748                                 \\
+  \textbf{500}                   & 0.000699                            & 0.000716                            & 0.002243                            & 0.002162                            & 0.9638876505                                  & 1.067773167                                  \\
+  \textbf{2000}                  & 0.002323                            & 0.00381                             & 0.006295                            & 0.008506                            & 1.351231136                                   & 0.8458262351                                 \\
+  \textbf{5000}                  & 0.011897                            & 0.014482                            & 0.020887                            & 0.036006                            & 1.723847369                                   & 0.4176732949                                
+\end{tabular}
+\caption{memory times (T\_memory) and total compute times (T\_total) for different N wrt 32 threads.}
+\label{tab:speed-up}
+\end{table}
+As we see in \ref{tab:speed-up} the speedup ratios (time taken by global version wrt time taken by shared version) calculated in the last 2 columns, show the stark contrast between a) inclusion of memory transfer times and b) exclusion of memory transfer times from the total compute times. The SpeedUp ratios calculated in the latter case show that the shared memory version actually performs worse than the global memory version if we neglect the memory transfers taken place between CPU and GPU. Hence this allows us to conclude that the advantage of the shared memory version is because of utilization of the on-chip memory. The memory access from global memory is slower than the latter on the device, hence the performance difference.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "report"
+%%% End:
