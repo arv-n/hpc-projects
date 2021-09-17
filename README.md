@@ -1,3 +1,3 @@
-### MPI Programming
+## HPC programming tasks
 
-This contains codes and related docs for MPI programming tasks undertaken for Introduction to High Performance Computing course at TU Delft 2020.  
+This repo contains some personal numerical experiments, including classes and assignments in HPC related programming. Sub-directory name is indicative of the type of platform used or the kind of experiment performed.  
