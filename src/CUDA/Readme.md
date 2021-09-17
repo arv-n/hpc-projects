@@ -1,0 +1,1 @@
+This directory contains some of personal projects in CUDA
