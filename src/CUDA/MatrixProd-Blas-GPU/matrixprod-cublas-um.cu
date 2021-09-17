@@ -4,8 +4,6 @@
  * 
  * - 'x' and 'b' are two vectors with size N;
  * - 'B' is the a square matrix with size NxN;
- * 
- * Kees Lemmens, Jan 2012
 */
 
 #include <stdio.h>

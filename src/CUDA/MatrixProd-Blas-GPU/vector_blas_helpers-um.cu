@@ -1,7 +1,5 @@
 /* Some common routines for allocating Blas vectors,
  * filling them with some data and printing them.
- * 
- * Kees Lemmens, Dec 2019
 */
 
 #include <stdio.h>

@@ -1,9 +1,7 @@
-# Hacked together from the Nvidia makefiles and common.mk
+# Patched from the Nvidia makefiles and common.mk
 # Stripped a lot of "rubbish" and force source, object and target to
 # be simply in the current dir.
 #
-# Kees Lemmens, Dec 2019
-
 # Add source files here
 TARGETS    := matrixprod-cublas matrixprod-cublas-um
 HELPERS    := matrix_blas_helpers vector_blas_helpers

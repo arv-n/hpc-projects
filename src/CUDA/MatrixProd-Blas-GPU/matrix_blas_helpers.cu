@@ -1,7 +1,5 @@
 /* Some common routines for allocating Blas matrices,
  * filling them with some data and printing them.
- * 
- * Kees Lemmens, June 2012
 */
 
 #include <stdio.h>
